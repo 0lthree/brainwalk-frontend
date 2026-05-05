@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE = "oithreed/brainwalk-frontend"
+        DOCKER_CREDENTIALS_ID = "dockerhub-credentials"
+        MANIFEST_REPO = "https://github.com/0lthree/brainwalk-k8s-manifests.git"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Set Image Tag') {
+            steps {
+                script {
+                    env.IMAGE_TAG = "${BUILD_NUMBER}"
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $DOCKER_IMAGE:$IMAGE_TAG -t $DOCKER_IMAGE:latest .'
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: DOCKER_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                    sh 'docker push $DOCKER_IMAGE:$IMAGE_TAG'
+                    sh 'docker push $DOCKER_IMAGE:latest'
+                }
+            }
+        }
+
+        stage('Update Kubernetes Manifest') {
+            steps {
+                script {
+                    def imageTag = "${BUILD_NUMBER}"
+
+                    withCredentials([usernamePassword(
+                        credentialsId: 'github-access',
+                        usernameVariable: 'GITHUB_USERNAME',
+                        passwordVariable: 'GITHUB_TOKEN'
+                    )]) {
+                        sh '''
+                        rm -rf brainwalk-k8s-manifests
+
+                        git clone https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/0lthree/brainwalk-k8s-manifests.git
+                        cd brainwalk-k8s-manifests/frontend
+
+                        sed -i "s|image: .*|image: oithreed/brainwalk-frontend:${BUILD_NUMBER}|" deployment.yaml
+
+                        git config user.email "jenkins@local"
+                        git config user.name "jenkins"
+
+                        git add deployment.yaml
+                        git commit -m "Update frontend image to ${BUILD_NUMBER}"
+                        git push
+                        '''
+                    }
+                }
+            }
+        }
+    }
+}
