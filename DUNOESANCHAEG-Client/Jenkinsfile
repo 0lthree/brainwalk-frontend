@@ -28,12 +28,6 @@ spec:
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
         stage('Set Image Tag') {
             steps {
                 script {
