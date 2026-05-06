@@ -69,26 +69,31 @@ spec:
         stage('Update Kubernetes Manifest') {
             steps {
                 container('docker') {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'github-access',
-                        usernameVariable: 'GITHUB_USERNAME',
-                        passwordVariable: 'GITHUB_TOKEN'
-                    )]) {
+                    withCredentials([
+                        string(
+                            credentialsId: 'github-token',
+                            variable: 'GITHUB_TOKEN'
+                        )
+                    ]) {
                         sh '''
-                        rm -rf brainwalk-k8s-manifests
+                            apk add --no-cache git
 
-                        git clone https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/0lthree/brainwalk-k8s-manifests.git
-                        cd brainwalk-k8s-manifests/frontend
+                            rm -rf brainwalk-k8s-manifests
 
-                        sed -i "s|image: .*|image: oithreed/brainwalk-frontend:${BUILD_NUMBER}|" deployment.yaml
+                            git clone https://0lthree:${GITHUB_TOKEN}@github.com/0lthree/brainwalk-k8s-manifests.git
 
-                        git config user.email "jenkins@local"
-                        git config user.name "jenkins"
+                            cd brainwalk-k8s-manifests
 
-                        git add deployment.yaml
-                        git commit -m "Update frontend image to ${BUILD_NUMBER}"
-                        git push
+                            sed -i "s|image: .*|image: 0lthree/brainwalk-frontend:${IMAGE_TAG}|g" deployment.yaml
+
+                            git config user.email "jenkins@brainwalk.com"
+                            git config user.name "Jenkins"
+
+                            git add .
+                            git commit -m "Update frontend image to ${IMAGE_TAG}"
+                            git push
                         '''
+                        
                     }
                 }
             }
