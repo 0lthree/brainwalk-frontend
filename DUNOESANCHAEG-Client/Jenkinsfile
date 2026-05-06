@@ -1,15 +1,30 @@
 pipeline {
     agent {
-        docker {
-            image 'docker:24.0.5'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: docker
+      image: docker:24.0.5
+      command:
+        - cat
+      tty: true
+      volumeMounts:
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+  volumes:
+    - name: docker-sock
+      hostPath:
+        path: /var/run/docker.sock
+'''
         }
     }
 
     environment {
         DOCKER_IMAGE = "oithreed/brainwalk-frontend"
         DOCKER_CREDENTIALS_ID = "dockerhub-credentials"
-        MANIFEST_REPO = "https://github.com/0lthree/brainwalk-k8s-manifests.git"
     }
 
     stages {
@@ -29,29 +44,31 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'cd DUNOESANCHAEG-Client && docker build -t $DOCKER_IMAGE:$IMAGE_TAG -t $DOCKER_IMAGE:latest .'
+                container('docker') {
+                    sh 'cd DUNOESANCHAEG-Client && docker build -t $DOCKER_IMAGE:$IMAGE_TAG -t $DOCKER_IMAGE:latest .'
+                }
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: DOCKER_CREDENTIALS_ID,
-                    usernameVariable: 'DOCKER_USERNAME',
-                    passwordVariable: 'DOCKER_PASSWORD'
-                )]) {
-                    sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
-                    sh 'docker push $DOCKER_IMAGE:$IMAGE_TAG'
-                    sh 'docker push $DOCKER_IMAGE:latest'
+                container('docker') {
+                    withCredentials([usernamePassword(
+                        credentialsId: DOCKER_CREDENTIALS_ID,
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )]) {
+                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                        sh 'docker push $DOCKER_IMAGE:$IMAGE_TAG'
+                        sh 'docker push $DOCKER_IMAGE:latest'
+                    }
                 }
             }
         }
 
         stage('Update Kubernetes Manifest') {
             steps {
-                script {
-                    def imageTag = "${BUILD_NUMBER}"
-
+                container('docker') {
                     withCredentials([usernamePassword(
                         credentialsId: 'github-access',
                         usernameVariable: 'GITHUB_USERNAME',
