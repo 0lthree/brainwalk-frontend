@@ -70,12 +70,10 @@ spec:
                     )]) {
                         sh """
                         apk add --no-cache git
-
                         rm -rf brainwalk-k8s-manifests
 
                         git clone https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/0lthree/brainwalk-k8s-manifests.git
-
-                        cd brainwalk-k8s-manifests
+                        cd brainwalk-k8s-manifests/frontend
 
                         sed -i 's|image: .*|image: 0lthree/brainwalk-frontend:${BUILD_NUMBER}|g' deployment.yaml
 
